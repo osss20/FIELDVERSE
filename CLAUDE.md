@@ -12,5 +12,5 @@ This is the only remote for this project. Do not push FIELDVERSE work to any oth
   `git rev-parse HEAD` must equal `git rev-parse origin/<branch>`. Never report a commit as pushed without this check.
 - Never force-push or rewrite published history. If a push is rejected, `git pull --rebase`, re-run checks, then `git push`.
 - Before committing, review `git diff --staged` for secrets, `.env` files, build output, and unrelated files.
-- Commit coherent, tested units of work, not every small edit. Run the project's tests/checks first once they exist.
+- Commit coherent, tested units of work, not every small edit. Run `npm run check` (typecheck, lint, tests, build) first; it must pass.
 - At the end of a task, report: changes, tests run, commit hash, and push status.
