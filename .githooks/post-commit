@@ -1,0 +1,22 @@
+#!/bin/sh
+# Push every new commit on the current branch to origin.
+# Never force-pushes. A failed push leaves the commit local and prints why.
+
+branch=$(git symbolic-ref --quiet --short HEAD) || {
+  echo "post-commit: detached HEAD, not pushing." >&2
+  exit 0
+}
+
+if [ -n "$FIELDVERSE_NO_AUTOPUSH" ]; then
+  echo "post-commit: FIELDVERSE_NO_AUTOPUSH set, not pushing." >&2
+  exit 0
+fi
+
+echo "post-commit: pushing $branch to origin..." >&2
+if git push --set-upstream origin "$branch"; then
+  echo "post-commit: pushed $(git rev-parse --short HEAD) to origin/$branch." >&2
+else
+  echo "post-commit: PUSH FAILED. Commit $(git rev-parse --short HEAD) exists only locally." >&2
+  echo "post-commit: fix the problem (auth, network, or 'git pull --rebase'), then run 'git push'." >&2
+fi
+exit 0
