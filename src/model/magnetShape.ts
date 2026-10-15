@@ -44,11 +44,31 @@ export function penetration(a: Dipole, b: Dipole, clearance = CLEARANCE): number
   return min
 }
 
+/** Required gap (m) between two specific magnets; CLEARANCE unless a caller relaxes it. */
+export type GapFn = (a: Dipole, b: Dipole) => number
+const defaultGap: GapFn = () => CLEARANCE
+
 /** Sum of penetration depths between `d` and every other magnet. */
-export function overlapDepth(d: Dipole, others: readonly Dipole[]): number {
+export function overlapDepth(d: Dipole, others: readonly Dipole[], gap: GapFn = defaultGap): number {
   let s = 0
-  for (const o of others) if (o.id !== d.id) s += penetration(d, o)
+  for (const o of others) if (o.id !== d.id) s += penetration(d, o, gap(d, o))
   return s
+}
+
+/**
+ * Approximate surface gap between two bodies (m): the largest clearance at
+ * which they do not overlap. 0 when touching or overlapping.
+ */
+export function surfaceGap(a: Dipole, b: Dipole): number {
+  if (penetration(a, b, 0) > 0) return 0
+  let lo = 0
+  let hi = Math.max(1e-6, Math.hypot(b.position.x - a.position.x, b.position.y - a.position.y))
+  for (let i = 0; i < 30; i++) {
+    const mid = (lo + hi) / 2
+    if (penetration(a, b, mid) > 0) hi = mid
+    else lo = mid
+  }
+  return lo
 }
 
 export interface Constrained<T> {
@@ -64,18 +84,21 @@ const EPS = 1e-9
  * overlap than the magnet already is. The second rule means a magnet that
  * somehow starts overlapping can always be pulled apart and never gets stuck.
  */
-const allowed = (candidate: Dipole, current: Dipole, others: readonly Dipole[]) => {
-  const depth = overlapDepth(candidate, others)
-  return depth <= EPS || depth <= overlapDepth(current, others) + EPS
+const allowed = (candidate: Dipole, current: Dipole, others: readonly Dipole[], gap: GapFn) => {
+  const depth = overlapDepth(candidate, others, gap)
+  if (depth <= EPS) return true
+  // No tolerance here: repeated small steps must never ratchet an overlap deeper.
+  const now = overlapDepth(current, others, gap)
+  return now > EPS && depth <= now
 }
 
 /** Largest t in [0, 1] with pose(t) allowed, assuming pose(0) is allowed. */
-function furthestAllowed(pose: (t: number) => Dipole, current: Dipole, others: readonly Dipole[]): number {
+function furthestAllowed(pose: (t: number) => Dipole, current: Dipole, others: readonly Dipole[], gap: GapFn): number {
   let lo = 0
   let hi = 1
   for (let i = 0; i < 24; i++) {
     const mid = (lo + hi) / 2
-    if (allowed(pose(mid), current, others)) lo = mid
+    if (allowed(pose(mid), current, others, gap)) lo = mid
     else hi = mid
   }
   return lo
@@ -86,16 +109,21 @@ function furthestAllowed(pose: (t: number) => Dipole, current: Dipole, others: r
  * the allowed pose closest to the target: sliding along x or y, or stopping
  * at contact. This keeps dragging smooth along another magnet's edge.
  */
-export function constrainMove(dipoles: readonly Dipole[], id: string, target: Vec2): Constrained<Vec2> {
+export function constrainMove(
+  dipoles: readonly Dipole[],
+  id: string,
+  target: Vec2,
+  gap: GapFn = defaultGap,
+): Constrained<Vec2> {
   const current = dipoles.find((d) => d.id === id)
   if (!current) return { value: target, blocked: false }
   if (!isFiniteVec(target)) return { value: current.position, blocked: true }
   const at = (p: Vec2): Dipole => ({ ...current, position: p })
-  if (allowed(at(target), current, dipoles)) return { value: target, blocked: false }
+  if (allowed(at(target), current, dipoles, gap)) return { value: target, blocked: false }
 
   const from = current.position
   const toward = (t: number) => at(add(from, scale(sub(target, from), t)))
-  const contact = add(from, scale(sub(target, from), furthestAllowed(toward, current, dipoles)))
+  const contact = add(from, scale(sub(target, from), furthestAllowed(toward, current, dipoles, gap)))
   // Slide from the start or from the contact point along whichever axis is free.
   const candidates = [
     vec(target.x, from.y),
@@ -103,7 +131,7 @@ export function constrainMove(dipoles: readonly Dipole[], id: string, target: Ve
     contact,
     vec(target.x, contact.y),
     vec(contact.x, target.y),
-  ].filter((p) => allowed(at(p), current, dipoles))
+  ].filter((p) => allowed(at(p), current, dipoles, gap))
   let best = from
   for (const p of candidates) if (length(sub(p, target)) < length(sub(best, target))) best = p
   return { value: best, blocked: true }
@@ -113,17 +141,22 @@ export function constrainMove(dipoles: readonly Dipole[], id: string, target: Ve
  * Rotates magnet `id` to `angle` (radians from +x), keeping its strength.
  * If that would overlap, it turns as far as possible along the shorter arc.
  */
-export function constrainRotate(dipoles: readonly Dipole[], id: string, angle: number): Constrained<Vec2> {
+export function constrainRotate(
+  dipoles: readonly Dipole[],
+  id: string,
+  angle: number,
+  gap: GapFn = defaultGap,
+): Constrained<Vec2> {
   const current = dipoles.find((d) => d.id === id)
   if (!current) return { value: fromAngle(angle), blocked: false }
   const m = length(current.moment)
   if (!Number.isFinite(angle)) return { value: current.moment, blocked: true }
   const at = (a: number): Dipole => ({ ...current, moment: fromAngle(a, m) })
-  if (allowed(at(angle), current, dipoles)) return { value: at(angle).moment, blocked: false }
+  if (allowed(at(angle), current, dipoles, gap)) return { value: at(angle).moment, blocked: false }
   const start = Math.atan2(current.moment.y, current.moment.x)
   // Shortest signed difference in (−π, π].
   const delta = Math.atan2(Math.sin(angle - start), Math.cos(angle - start))
-  const t = furthestAllowed((s) => at(start + s * delta), current, dipoles)
+  const t = furthestAllowed((s) => at(start + s * delta), current, dipoles, gap)
   return { value: at(start + t * delta).moment, blocked: true }
 }
 

@@ -1,6 +1,7 @@
 # FIELDVERSE
 
-GitHub repository: https://github.com/osss20/FIELDVERSE (private, default branch `main`).
+GitHub repository: https://github.com/osss20/FIELDVERSE (public, default branch `main`).
+Live site: https://osss20.github.io/FIELDVERSE/ — deployed by `.github/workflows/deploy-pages.yml` after checks pass on every push to `main`.
 This is the only remote for this project. Do not push FIELDVERSE work to any other repository.
 
 ## Git workflow
