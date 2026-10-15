@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { makeDipole, totalField } from './dipole'
-import { computeFieldLines, DEFAULT_TRACE, traceFieldLine, type Bounds, type TraceOptions } from './fieldLines'
+import { makeDipole, totalField, withStrength } from './dipole'
+import {
+  computeFieldLines,
+  DEFAULT_LINE_SET,
+  DEFAULT_TRACE,
+  fluxSeeds,
+  lineCounts,
+  traceFieldLine,
+  type Bounds,
+  type TraceOptions,
+} from './fieldLines'
 import { length, sub, vec } from './vec2'
 
 const bounds: Bounds = { minX: -3, minY: -3, maxX: 3, maxY: 3 }
@@ -108,5 +117,92 @@ describe('computeFieldLines', () => {
       base,
     )
     for (const l of lines) expect(l.points.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y))).toBe(true)
+  })
+})
+
+describe('flux-weighted seeding', () => {
+  const seedOpts = { seedRadiusFactor: 1.05, softening: 0.01, fluxSamples: 720 }
+  const finite = (p: { x: number; y: number }) => Number.isFinite(p.x) && Number.isFinite(p.y)
+
+  it('spaces a lone dipole’s outward seeds equally in sin θ (equal flux per line)', () => {
+    const d = makeDipole('a', 0.2, -0.1, 0, 2) // moment along +y
+    const seeds = fluxSeeds([d], 0, 20, seedOpts)
+    const out = seeds.filter((s) => s.outward)
+    expect(out).toHaveLength(10)
+    // θ from the moment axis; B·n̂ ∝ cos θ, so cumulative flux ∝ sin θ.
+    const sines = out
+      .map((s) => {
+        const r = { x: s.point.x - d.position.x, y: s.point.y - d.position.y }
+        return Math.sin(Math.atan2(-r.x, r.y)) // signed angle from +y
+      })
+      .sort((a, b) => a - b)
+    for (let k = 0; k < sines.length; k++) {
+      expect(Math.abs(sines[k] - (-1 + (2 * k + 1) / 10))).toBeLessThan(0.01)
+    }
+    // Every outward seed is on the north half, every inward one on the south half.
+    for (const s of seeds) expect(s.point.y > d.position.y).toBe(s.outward)
+  })
+
+  it('puts more seeds near the poles than equal-angle spacing did', () => {
+    const d = makeDipole('a', 0, 0, 1, 0)
+    const out = fluxSeeds([d], 0, 40, seedOpts).filter((s) => s.outward)
+    const nearPole = out.filter((s) => Math.abs(Math.atan2(s.point.y, s.point.x)) < Math.PI / 6).length
+    // Equal angles give 1/3 of outward seeds within 30° of the axis; equal flux gives 1/2.
+    expect(nearPole / out.length).toBeGreaterThan(0.45)
+  })
+
+  it('gives line counts proportional to strength', () => {
+    const counts = lineCounts(
+      [1, 2, 3].map((m, i) => withStrength(makeDipole(`m${i}`, i, 0, 1, 0), m)),
+      DEFAULT_LINE_SET,
+    )
+    expect(counts[1]).toBe(2 * counts[0])
+    expect(counts[2]).toBe(3 * counts[0])
+  })
+
+  it('keeps the total number of lines bounded', () => {
+    const many = Array.from({ length: 12 }, (_, i) => makeDipole(`m${i}`, (i % 4) - 1.5, Math.floor(i / 4) - 1, 5, 0))
+    const counts = lineCounts(many, DEFAULT_LINE_SET)
+    expect(counts.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(DEFAULT_LINE_SET.maxTotalLines!)
+    const lines = computeFieldLines(many, { ...DEFAULT_LINE_SET, bounds })
+    expect(lines.length).toBeLessThanOrEqual(DEFAULT_LINE_SET.maxTotalLines!)
+    for (const l of lines) expect(l.points.length).toBeLessThanOrEqual(DEFAULT_TRACE.maxSteps + 2)
+  })
+
+  it('never seeds inside another magnet', () => {
+    const ds = [makeDipole('a', 0, 0, 1, 0), makeDipole('b', 0.2, 0, 1, 0)]
+    for (let i = 0; i < ds.length; i++) {
+      for (const s of fluxSeeds(ds, i, 40, seedOpts)) {
+        ds.forEach((o, j) => {
+          if (j !== i) expect(Math.hypot(s.point.x - o.position.x, s.point.y - o.position.y)).toBeGreaterThanOrEqual(o.coreRadius)
+        })
+      }
+    }
+  })
+
+  it('skips invalid magnets instead of producing NaN lines', () => {
+    const ds = [
+      makeDipole('ok', 0, 0, 1, 0),
+      makeDipole('nanPos', Number.NaN, 0, 1, 0),
+      makeDipole('infMoment', 0.8, 0, Infinity, 0),
+      makeDipole('zero', -0.8, 0, 0, 0),
+    ]
+    expect(lineCounts(ds, DEFAULT_LINE_SET).slice(1)).toEqual([0, 0, 0])
+    expect(fluxSeeds(ds, 1, 10, seedOpts)).toEqual([])
+    // The NaN-position magnet poisons the total field everywhere; tracing must stop cleanly.
+    for (const l of computeFieldLines(ds, { ...DEFAULT_LINE_SET, bounds })) {
+      expect(l.points.every(finite)).toBe(true)
+    }
+  })
+
+  it('field-line direction still follows B for flux-weighted seeds', () => {
+    const ds = [makeDipole('a', -0.5, 0, 1, 0), withStrength(makeDipole('b', 0.6, 0.3, 0, 1), 2.5)]
+    for (const l of computeFieldLines(ds, { ...DEFAULT_LINE_SET, bounds })) {
+      if (l.points.length < 3) continue
+      const p = l.points[1]
+      const step = { x: (l.points[2].x - p.x) * l.direction, y: (l.points[2].y - p.y) * l.direction }
+      const b = totalField(ds, p, DEFAULT_LINE_SET.softening)
+      expect(step.x * b.x + step.y * b.y).toBeGreaterThan(0)
+    }
   })
 })

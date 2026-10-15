@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dBzdz, dipoleField, makeDipole, MU0_OVER_4PI, totalField } from './dipole'
+import { dBzdz, dipoleField, makeDipole, MU0_OVER_4PI, STRENGTH, strengthOf, totalField, withStrength } from './dipole'
 import { add, vec, type Vec2 } from './vec2'
 
 const k = MU0_OVER_4PI
@@ -91,5 +91,53 @@ describe('superposition and field identities', () => {
       expect(rel(a.x, b.x)).toBeLessThan(1e-12)
       expect(rel(a.y, -b.y)).toBeLessThan(1e-12)
     }
+  })
+})
+
+describe('magnet strength', () => {
+  const a = makeDipole('a', -0.4, 0.1, 0.6, 0.8) // |m| = 1
+  const b = makeDipole('b', 0.5, -0.2, -0.4, 1.2)
+
+  it('sets |m| and keeps the moment direction', () => {
+    const s = withStrength(a, 3)
+    expect(strengthOf(s)).toBeCloseTo(3, 12)
+    expect(s.moment.x / s.moment.y).toBeCloseTo(0.6 / 0.8, 12)
+    expect(s.position).toEqual(a.position)
+  })
+
+  it('scales the field linearly, as B ∝ m in the dipole model', () => {
+    const p = vec(0.3, 0.9)
+    const b1 = dipoleField(a, p)
+    const b3 = dipoleField(withStrength(a, 2.5), p)
+    expect(rel(b3.x, 2.5 * b1.x)).toBeLessThan(1e-12)
+    expect(rel(b3.y, 2.5 * b1.y)).toBeLessThan(1e-12)
+  })
+
+  it('changes one magnet only and superposition still holds', () => {
+    const p = vec(0.1, 0.7)
+    const before = [a, b]
+    const after = before.map((d) => (d.id === 'a' ? withStrength(d, 4) : d))
+    expect(after[1]).toBe(b) // untouched object
+    expect(before[0].moment).toEqual(a.moment) // original not mutated
+    const sum = add(dipoleField(after[0], p), dipoleField(after[1], p))
+    const total = totalField(after, p)
+    expect(rel(total.x, sum.x)).toBeLessThan(1e-14)
+    expect(rel(total.y, sum.y)).toBeLessThan(1e-14)
+    // The change in the total field is exactly the change in a's own field.
+    const delta = totalField(after, p).x - totalField(before, p).x
+    expect(rel(delta, 3 * dipoleField(a, p).x)).toBeLessThan(1e-9)
+  })
+
+  it('clamps to the documented range and rejects invalid values', () => {
+    expect(strengthOf(withStrength(a, 100))).toBeCloseTo(STRENGTH.max, 12)
+    expect(strengthOf(withStrength(a, 0))).toBeCloseTo(STRENGTH.min, 12)
+    expect(strengthOf(withStrength(a, -2))).toBeCloseTo(STRENGTH.min, 12)
+    expect(strengthOf(withStrength(a, Number.NaN))).toBeCloseTo(STRENGTH.default, 12)
+    expect(strengthOf(withStrength(a, Infinity))).toBeCloseTo(STRENGTH.default, 12)
+  })
+
+  it('gives a zero-moment magnet a valid direction when strength is set', () => {
+    const z = withStrength(makeDipole('z', 0, 0, 0, 0), 2)
+    expect(z.moment).toEqual({ x: 2, y: 0 })
   })
 })

@@ -68,6 +68,27 @@ export function coreHit(dipoles: readonly Dipole[], p: Vec2): number {
   return -1
 }
 
+/**
+ * Magnet strength is the dipole moment magnitude |m| in A·m². These are model
+ * values for exploring the field shape, not calibrated measurements of any
+ * real magnet. The minimum is above zero so every magnet keeps a direction.
+ */
+export const STRENGTH = { min: 0.1, max: 5, step: 0.1, default: 1 } as const
+
+export const strengthOf = (d: Dipole): number => Math.hypot(d.moment.x, d.moment.y)
+
+/** Unit vector along the moment (S → N); +x for a zero or invalid moment. */
+export const axisOf = (d: Dipole): Vec2 => {
+  const m = strengthOf(d)
+  return m > 0 && Number.isFinite(m) ? vec(d.moment.x / m, d.moment.y / m) : vec(1, 0)
+}
+
+/** Returns a copy with |m| set to `strength` (clamped to STRENGTH), keeping its direction. */
+export function withStrength(d: Dipole, strength: number): Dipole {
+  const s = Number.isFinite(strength) ? Math.min(STRENGTH.max, Math.max(STRENGTH.min, strength)) : STRENGTH.default
+  return { ...d, moment: scale(axisOf(d), s) }
+}
+
 export const makeDipole = (id: string, x: number, y: number, mx: number, my: number, coreRadius = 0.12): Dipole => ({
   id,
   position: vec(x, y),

@@ -1,5 +1,5 @@
-import { coreHit, totalField, type Dipole } from './dipole'
-import { add, distance, dot, fromAngle, isFiniteVec, length, scale, sub, type Vec2 } from './vec2'
+import { coreHit, strengthOf, totalField, type Dipole } from './dipole'
+import { add, distance, dot, fromAngle, isFiniteVec, length, scale, type Vec2 } from './vec2'
 
 export type FieldFn = (p: Vec2) => Vec2
 
@@ -132,55 +132,146 @@ export function traceFieldLine(
 
 export interface FieldLineSetOptions {
   bounds: Bounds
-  /** Lines per dipole for a moment of 1 A·m²; scaled by |m|. */
+  /** Lines per dipole for |m| = 1 A·m²; the count is proportional to |m|. */
   linesPerUnitMoment: number
+  /** Visual floor so very weak magnets still show their shape. */
   minLinesPerDipole: number
   maxLinesPerDipole: number
+  /** Cap on lines across all magnets; counts are scaled down proportionally. */
+  maxTotalLines?: number
   /** Seed circle radius as a multiple of the core radius. */
   seedRadiusFactor: number
+  /** Flux samples taken round each seed circle. */
+  fluxSamples?: number
   /** ε for the softened field (m). */
   softening: number
   trace?: Partial<Omit<TraceOptions, 'bounds' | 'direction' | 'startCore'>>
 }
 
 export const DEFAULT_LINE_SET: Omit<FieldLineSetOptions, 'bounds'> = {
-  linesPerUnitMoment: 28,
-  minLinesPerDipole: 8,
-  maxLinesPerDipole: 40,
+  linesPerUnitMoment: 20,
+  minLinesPerDipole: 6,
+  maxLinesPerDipole: 80,
+  maxTotalLines: 240,
   seedRadiusFactor: 1.05,
+  fluxSamples: 360,
   softening: 0.01,
 }
 
+export interface Seed {
+  point: Vec2
+  /** True where B points out of the seed circle (traced along B). */
+  outward: boolean
+}
+
+const validDipole = (d: Dipole) =>
+  isFiniteVec(d.position) && isFiniteVec(d.moment) && Number.isFinite(d.coreRadius) && d.coreRadius > 0
+
+/** Lines per dipole before the global cap: proportional to |m|, clamped. */
+export function lineCounts(dipoles: readonly Dipole[], options: Omit<FieldLineSetOptions, 'bounds'>): number[] {
+  const raw = dipoles.map((d) => {
+    const m = strengthOf(d)
+    if (!validDipole(d) || !(m > 0)) return 0
+    return Math.round(Math.min(options.maxLinesPerDipole, Math.max(options.minLinesPerDipole, m * options.linesPerUnitMoment)))
+  })
+  const total = raw.reduce((a, b) => a + b, 0)
+  const cap = options.maxTotalLines ?? Infinity
+  if (total <= cap) return raw
+  const f = cap / total
+  return raw.map((n) => (n === 0 ? 0 : Math.max(2, Math.floor(n * f))))
+}
+
 /**
- * Seeds points evenly round each dipole (count ∝ |m|). Seeds where B points
- * outward are traced along B; seeds where B points inward are traced against
- * B, and dropped if they end in a core, since an outward seed already
- * produced that line. This avoids drawing most lines twice.
+ * Flux-weighted seeds on a circle round dipole `index`.
+ *
+ * The normal component B·n̂ of the total field is sampled round the circle.
+ * Outward seeds sit at equal quantiles of the outward flux and inward seeds at
+ * equal quantiles of the inward flux, so neighbouring lines bound equal flux
+ * and line density follows field strength (Faraday's picture). For a lone
+ * dipole B·n̂ ∝ cos θ, which gives seeds equally spaced in sin θ.
+ *
+ * Approximation: this is flux through a circle in the 2D slice, not through
+ * a sphere in 3D, so line density in the picture is qualitative.
+ */
+export function fluxSeeds(
+  dipoles: readonly Dipole[],
+  index: number,
+  count: number,
+  options: Pick<FieldLineSetOptions, 'seedRadiusFactor' | 'softening' | 'fluxSamples'>,
+): Seed[] {
+  const d = dipoles[index]
+  if (count <= 0 || !validDipole(d)) return []
+  const samples = options.fluxSamples ?? 360
+  const radius = d.coreRadius * options.seedRadiusFactor
+  const axis = Math.atan2(d.moment.y, d.moment.x)
+  const dphi = (2 * Math.PI) / samples
+  const flux: number[] = []
+  let pos = 0
+  let neg = 0
+  for (let j = 0; j < samples; j++) {
+    const n = fromAngle(axis + (j + 0.5) * dphi)
+    const p = add(d.position, scale(n, radius))
+    // Points inside another magnet cannot seed a visible line.
+    const blocked = coreHit(dipoles, p) >= 0
+    const f = blocked ? 0 : dot(totalField(dipoles, p, options.softening), n)
+    const v = Number.isFinite(f) ? f : 0
+    flux.push(v)
+    if (v > 0) pos += v
+    else neg -= v
+  }
+  if (!(pos + neg > 0)) return []
+
+  const nOut = Math.round((count * pos) / (pos + neg))
+  const seeds: Seed[] = []
+  const place = (n: number, total: number, sign: 1 | -1) => {
+    if (n <= 0 || total <= 0) return
+    let k = 0
+    let acc = 0
+    for (let j = 0; j < samples && k < n; j++) {
+      const f = sign * flux[j]
+      if (f <= 0) continue
+      // Place every quantile target that falls inside this sample's bin.
+      while (k < n && acc + f >= ((k + 0.5) / n) * total) {
+        const t = (((k + 0.5) / n) * total - acc) / f
+        const dir = fromAngle(axis + (j + t) * dphi)
+        const point = add(d.position, scale(dir, radius))
+        // Interpolating within a bin can cross into a neighbouring core.
+        if (coreHit(dipoles, point) < 0) seeds.push({ point, outward: sign === 1 })
+        k++
+      }
+      acc += f
+    }
+  }
+  place(nOut, pos, 1)
+  place(count - nOut, neg, -1)
+  return seeds
+}
+
+/**
+ * Traces flux-weighted seeds round every dipole. Outward seeds are traced
+ * along B; inward seeds against B, and dropped if they end in a core, because
+ * an outward seed elsewhere already drew that line. Lines that enter from
+ * outside the view are kept, so nothing visible is lost.
  */
 export function computeFieldLines(dipoles: readonly Dipole[], options: FieldLineSetOptions): FieldLine[] {
   const field: FieldFn = (p) => totalField(dipoles, p, options.softening)
+  const counts = lineCounts(dipoles, options)
   const lines: FieldLine[] = []
-  dipoles.forEach((d, index) => {
-    const m = length(d.moment)
-    if (m === 0) return
-    const count = Math.round(
-      Math.min(options.maxLinesPerDipole, Math.max(options.minLinesPerDipole, m * options.linesPerUnitMoment)),
-    )
-    const axis = Math.atan2(d.moment.y, d.moment.x)
-    const radius = d.coreRadius * options.seedRadiusFactor
-    for (let k = 0; k < count; k++) {
-      // Offset by half a slot so no seed sits exactly on the moment axis.
-      const offset = fromAngle(axis + ((k + 0.5) / count) * 2 * Math.PI, radius)
-      const seed = add(d.position, offset)
-      if (coreHit(dipoles, seed) >= 0) continue
-      const outward = dot(field(seed), sub(seed, d.position)) >= 0
+  dipoles.forEach((_, index) => {
+    for (const seed of fluxSeeds(dipoles, index, counts[index], options)) {
       const line = traceFieldLine(
         field,
-        seed,
-        { ...DEFAULT_TRACE, ...options.trace, bounds: options.bounds, direction: outward ? 1 : -1, startCore: index },
+        seed.point,
+        {
+          ...DEFAULT_TRACE,
+          ...options.trace,
+          bounds: options.bounds,
+          direction: seed.outward ? 1 : -1,
+          startCore: index,
+        },
         dipoles,
       )
-      if (!outward && line.stop === 'core') continue
+      if (!seed.outward && line.stop === 'core') continue
       lines.push(line)
     }
   })

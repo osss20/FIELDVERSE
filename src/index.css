@@ -13,6 +13,7 @@
   --magnet-outline: #1d2330;
   --selected: #e0a100;
   --handle: #8a93a5;
+  --blocked: #d13b2f;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -26,6 +27,7 @@
     --field-line: #8fb3e0;
     --magnet-outline: #e6e9ef;
     --handle: #6c7487;
+    --blocked: #ff6b5e;
   }
 }
 
@@ -63,7 +65,8 @@ body,
   letter-spacing: 0.08em;
 }
 
-.toolbar button {
+.toolbar button,
+.panel button {
   padding: 6px 12px;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -74,7 +77,8 @@ body,
   cursor: pointer;
 }
 
-.toolbar button:disabled {
+.toolbar button:disabled,
+.panel button:disabled {
   opacity: 0.45;
   cursor: default;
 }
@@ -83,6 +87,73 @@ body,
   margin-left: auto;
   color: var(--muted);
   font-size: 13px;
+}
+
+.panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-height: 50px; /* fits one row of buttons, so selecting never resizes the canvas */
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.panel-title {
+  font-weight: 600;
+}
+
+.panel-label {
+  color: var(--muted);
+}
+
+.panel input[type='range'] {
+  flex: 1 1 140px;
+  max-width: 260px;
+  min-width: 120px;
+  accent-color: var(--selected);
+}
+
+.panel-value {
+  min-width: 9.5em;
+  font-variant-numeric: tabular-nums;
+}
+
+.panel-empty {
+  color: var(--muted);
+}
+
+.panel-message {
+  margin-left: auto;
+  white-space: nowrap;
+  color: var(--blocked);
+  font-size: 13px;
+}
+
+.panel-message:empty {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .hint {
+    display: none;
+  }
+
+  /* Fits the wrapped selected-magnet controls, so selecting never resizes the canvas. */
+  .panel {
+    min-height: 104px;
+    align-content: flex-start;
+  }
+
+  /* Own row on small screens; space is reserved so the canvas never resizes mid-drag. */
+  .panel-message,
+  .panel-message:empty {
+    display: block;
+    flex-basis: 100%;
+    min-height: 1.3em;
+    margin-left: 0;
+  }
 }
 
 .stage {
