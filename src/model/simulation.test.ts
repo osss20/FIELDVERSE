@@ -119,7 +119,20 @@ describe('friction, strength and stability', () => {
     expect(events.filter((e) => e.type === 'repel')).toHaveLength(1)
   })
 
-  it('ignores invalid frame times', () => {
+  it('the first zero-length step after a change keeps the loop alive when a magnet will move', () => {
+    // A requestAnimationFrame loop starts with dt = 0; it must not stop before forces can act.
+    const near = initialSimState([makeDipole('a', -0.21, 0, 1, 0), makeDipole('b', 0.21, 0, 1, 0)])
+    expect(step(near, 0, bounds).active).toBe(true)
+    const far = initialSimState([makeDipole('a', -0.6, 0, 1, 0), makeDipole('b', 0.6, 0, 1, 0)])
+    expect(step(far, 0, bounds).active).toBe(false)
+  })
+
+  it('a pair pressed together in contact does not keep the loop running', () => {
+    const attached = run(initialSimState([makeDipole('a', -0.21, 0, 1, 0), makeDipole('b', 0.21, 0, 1, 0)]), 1).state
+    expect(step(attached, 1 / 60, bounds).active).toBe(false)
+  })
+
+    it('ignores invalid frame times', () => {
     const s = initialSimState([makeDipole('a', -0.21, 0, 1, 0), makeDipole('b', 0.21, 0, 1, 0)])
     for (const dt of [Number.NaN, -1, Infinity]) {
       const r = step(s, dt, bounds)

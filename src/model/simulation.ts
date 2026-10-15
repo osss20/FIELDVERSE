@@ -85,6 +85,8 @@ export interface StepResult {
   active: boolean
   /** True when the held magnet is being held back by an attachment. */
   holding: boolean
+  /** True when the held magnet's move was limited to avoid overlapping a magnet it isn't attached to. */
+  blocked: boolean
 }
 
 export const pairKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`)
@@ -132,11 +134,11 @@ function placeHeld(
   state: SimState,
   load: NetLoad,
   bounds: Bounds,
-): { state: SimState; events: SimEvent[]; holding: boolean } {
+): { state: SimState; events: SimEvent[]; holding: boolean; blocked: boolean } {
   const drag = state.drag!
   const held = state.dipoles.find((d) => d.id === drag.id)
   if (!held || drag.mode !== 'move' || !drag.target || !isFiniteVec(drag.target)) {
-    return { state, events: [], holding: false }
+    return { state, events: [], holding: false, blocked: false }
   }
   let lag = scale(load.force, SIM.dragCompliance)
   if (length(lag) > SIM.maxDragLag) lag = scale(lag, SIM.maxDragLag / length(lag))
@@ -146,7 +148,7 @@ function placeHeld(
   const events: SimEvent[] = []
   let attached = state.attached
   if (mine.length > 0) {
-    if (distance(drag.target, held.position) < SIM.breakaway) return { state, events, holding: true }
+    if (distance(drag.target, held.position) < SIM.breakaway) return { state, events, holding: true, blocked: false }
     // Pulled hard enough: separate from every partner.
     attached = state.attached.filter((k) => !mine.includes(k))
     for (const k of mine) {
@@ -159,7 +161,7 @@ function placeHeld(
   }
   const moved = constrainMove(state.dipoles, held.id, desired, gapFor(attached))
   const dipoles = state.dipoles.map((d) => (d.id === held.id ? { ...d, position: moved.value } : d))
-  return { state: { ...state, dipoles, attached }, events, holding: false }
+  return { state: { ...state, dipoles, attached }, events, holding: false, blocked: moved.blocked }
 }
 
 /** Updates attract/repel phases with hysteresis and reports pairs that just started interacting. */
@@ -266,6 +268,7 @@ export function step(state: SimState, dt: number, bounds: Bounds): StepResult {
   let s = state
   let moved = false
   let holding = false
+  let blocked = false
   let loads = netLoads(s.dipoles)
 
   for (let i = 0; i < n; i++) {
@@ -274,6 +277,7 @@ export function step(state: SimState, dt: number, bounds: Bounds): StepResult {
       const placed = placeHeld(s, loads[idx] ?? { force: vec(0, 0), torque: 0 }, bounds)
       s = placed.state
       holding = placed.holding
+      blocked = placed.blocked
       events.push(...placed.events)
       loads = netLoads(s.dipoles)
     }
@@ -290,7 +294,18 @@ export function step(state: SimState, dt: number, bounds: Bounds): StepResult {
     events.push(...at.events)
     loads = netLoads(s.dipoles)
   }
-  return { state: s, events, loads, active: moved || s.drag !== null, holding }
+  // Contact with a partner it just attached to is not a block worth reporting.
+  if (blocked && s.drag && s.attached.some((k) => k.split('|').includes(s.drag!.id))) blocked = false
+  // A zero-length step (the first after a change) moves nothing, so judge it by whether
+  // any free magnet is loaded past friction and would move once time advances.
+  const wouldMove =
+    frame === 0 &&
+    s.dipoles.some(
+      (d, i) =>
+        s.drag?.id !== d.id &&
+        (length(loads[i].force) > SIM.staticForce || Math.abs(loads[i].torque) > SIM.staticTorque),
+    )
+  return { state: s, events, loads, active: moved || wouldMove || s.drag !== null, holding, blocked }
 }
 
 /** Unit vector helper for callers that rotate a magnet by an angle. */

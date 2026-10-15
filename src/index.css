@@ -1,55 +1,32 @@
+/* FIELDVERSE: a dark scientific workspace. The canvas is the instrument; panels are quiet.
+   Single deliberate dark theme. Cyan = field and attraction, violet = repulsion,
+   amber = net force, red/blue = north/south poles. */
 :root {
-  color-scheme: light dark;
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --bg: #f6f7f9;
-  --fg: #1d2330;
-  --muted: #5d6677;
-  --border: #d6dae2;
-  --button-bg: #ffffff;
-  --canvas-bg: #ffffff;
-  --field-line: #3d5a80;
-  --pole-north: #c8423b;
-  --pole-south: #2f6bb3;
-  --magnet-outline: #1d2330;
-  --selected: #e0a100;
-  --handle: #8a93a5;
-  --blocked: #d13b2f;
-}
-
-/* Dark tokens apply for a dark system theme unless light is chosen explicitly,
-   and whenever dark is chosen explicitly (data-theme on the root element). */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --bg: #12151b;
-    --fg: #e6e9ef;
-    --muted: #9aa3b5;
-    --border: #2c323d;
-    --button-bg: #1c2129;
-    --canvas-bg: #0d1015;
-    --field-line: #8fb3e0;
-    --magnet-outline: #e6e9ef;
-    --handle: #6c7487;
-    --blocked: #ff6b5e;
-    color-scheme: dark;
-  }
-}
-
-:root[data-theme='dark'] {
-  --bg: #12151b;
-  --fg: #e6e9ef;
-  --muted: #9aa3b5;
-  --border: #2c323d;
-  --button-bg: #1c2129;
-  --canvas-bg: #0d1015;
-  --field-line: #8fb3e0;
-  --magnet-outline: #e6e9ef;
-  --handle: #6c7487;
-  --blocked: #ff6b5e;
   color-scheme: dark;
-}
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-:root[data-theme='light'] {
-  color-scheme: light;
+  --bg: #0a0f1c;
+  --surface: #0f1628;
+  --surface-2: #151e35;
+  --border: #22304d;
+  --fg: #e4eaf5;
+  --muted: #8a97b2;
+  --accent: #4fd1e8;
+  --accent-2: #6d8bff;
+
+  --canvas-bg: #070b16;
+  --grid: #101a2e;
+  --field-line: #5cc8e6;
+  --field-flow: #d4f6ff;
+  --attract: #4fd1e8;
+  --repel: #b28cff;
+  --force: #f2c46b;
+  --pole-north: #e05252;
+  --pole-south: #3d7be0;
+  --magnet-outline: #9fb0cf;
+  --handle: #5b6885;
+  --blocked: #ff7a6b;
 }
 
 * {
@@ -65,121 +42,116 @@ body,
   color: var(--fg);
 }
 
+body {
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+button,
+select,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .app {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
 }
 
-.toolbar {
+/* Top bar */
+.topbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 8px 16px;
   padding: 10px 16px;
   border-bottom: 1px solid var(--border);
+  background: var(--surface);
 }
 
-.toolbar h1 {
-  margin: 0 12px 0 0;
-  font-size: 18px;
-  letter-spacing: 0.08em;
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
 }
 
-.toolbar button,
-.panel button {
-  padding: 6px 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--button-bg);
-  color: var(--fg);
-  font: inherit;
-  font-size: 14px;
-  cursor: pointer;
+.brand-mark {
+  align-self: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  box-shadow: inset 0 0 0 3px var(--surface), inset 0 0 0 7px var(--accent-2);
 }
 
-.toolbar button:disabled,
-.panel button:disabled {
-  opacity: 0.45;
-  cursor: default;
+.brand-name {
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.14em;
 }
 
-.hint {
-  margin-left: auto;
+.brand-sub {
   color: var(--muted);
   font-size: 13px;
 }
 
-.panel {
+.toggles {
   display: flex;
   flex-wrap: wrap;
+  gap: 6px;
+}
+
+.toggle {
+  display: inline-flex;
   align-items: center;
-  gap: 8px 12px;
-  min-height: 50px; /* fits one row of buttons, so selecting never resizes the canvas */
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--border);
-  font-size: 14px;
-}
-
-.panel-title {
-  font-weight: 600;
-}
-
-.panel-label {
+  gap: 7px;
+  min-height: 34px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
   color: var(--muted);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
 }
 
-.panel input[type='range'] {
-  flex: 1 1 140px;
-  max-width: 260px;
-  min-width: 120px;
-  accent-color: var(--selected);
+.toggle-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--handle);
+  transition: background 0.15s;
 }
 
-.panel-value {
-  min-width: 9.5em;
-  font-variant-numeric: tabular-nums;
+.toggle[aria-pressed='true'] {
+  color: var(--fg);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
 
-.panel-empty {
-  color: var(--muted);
+.toggle[aria-pressed='true'] .toggle-dot {
+  background: var(--accent);
 }
 
-.panel-message {
-  margin-left: auto;
-  white-space: nowrap;
-  color: var(--blocked);
-  font-size: 13px;
-}
-
-.panel-message:empty {
-  display: none;
-}
-
-@media (max-width: 600px) {
-  .hint {
-    display: none;
-  }
-
-  /* Fits the wrapped selected-magnet controls, so selecting never resizes the canvas. */
-  .panel {
-    min-height: 104px;
-    align-content: flex-start;
-  }
-
-  /* Own row on small screens; space is reserved so the canvas never resizes mid-drag. */
-  .panel-message,
-  .panel-message:empty {
-    display: block;
-    flex-basis: 100%;
-    min-height: 1.3em;
-    margin-left: 0;
-  }
+/* Workspace */
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  min-height: 0;
 }
 
 .stage {
-  flex: 1;
+  position: relative;
+  min-width: 0;
   min-height: 0;
+  background: var(--canvas-bg);
 }
 
 .field-canvas {
@@ -187,4 +159,326 @@ body,
   width: 100%;
   height: 100%;
   touch-action: none;
+}
+
+.legend {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--canvas-bg) 80%, transparent);
+  color: var(--muted);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.swatch {
+  display: inline-block;
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  margin-left: 6px;
+}
+
+.swatch-field {
+  background: var(--field-line);
+}
+
+.swatch-attract {
+  background: var(--attract);
+  box-shadow: 0 0 6px var(--attract);
+}
+
+.swatch-repel {
+  background: var(--repel);
+  box-shadow: 0 0 6px var(--repel);
+}
+
+.swatch-force {
+  background: var(--force);
+}
+
+/* Sidebar */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px;
+  border-left: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.card-title {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.tool-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tool-row.tight {
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+
+.tool-row.tight button {
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.card button {
+  min-height: 34px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.card button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+}
+
+.card button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.field-row label,
+.field-row .label {
+  color: var(--muted);
+}
+
+.field-row select {
+  min-height: 34px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-2);
+}
+
+.field-row select:only-of-type:last-child {
+  grid-column: 2 / 4;
+}
+
+.field-row input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.readout {
+  min-width: 4.5em;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.hint,
+.small {
+  margin: 0;
+  font-size: 12px;
+}
+
+.hint,
+.muted {
+  color: var(--muted);
+}
+
+.status-message {
+  margin: 0;
+  min-height: 2.9em;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.readouts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+  margin: 0;
+}
+
+.readouts dt {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.readouts dd {
+  margin: 2px 0 0;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.meter-row {
+  grid-column: 1 / -1;
+}
+
+.pole {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0 4px;
+  border-radius: 4px;
+  color: #fff;
+  font-weight: 700;
+  text-align: center;
+}
+
+.pole-N {
+  background: var(--pole-north);
+}
+
+.pole-S {
+  background: var(--pole-south);
+}
+
+.chip {
+  display: inline-block;
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.chip-attract {
+  border-color: var(--attract);
+  color: var(--attract);
+}
+
+.chip-repel {
+  border-color: var(--repel);
+  color: var(--repel);
+}
+
+.chip-idle {
+  color: var(--muted);
+}
+
+.meter {
+  height: 6px;
+  margin-top: 4px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--surface-2);
+}
+
+.meter span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--muted);
+  transition: width 0.12s linear;
+}
+
+.meter-attract span {
+  background: var(--attract);
+}
+
+.meter-repel span {
+  background: var(--repel);
+}
+
+.meter-note {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-family: system-ui, sans-serif;
+  font-size: 11px;
+}
+
+.principle {
+  margin: 0;
+}
+
+.model-note {
+  margin: 0;
+  padding: 0 2px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* Tablet: narrower sidebar. */
+@media (max-width: 1100px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr) 280px;
+  }
+}
+
+/* Phone and small tablet: canvas on top at a fixed height, panels below, page scrolls. */
+@media (max-width: 820px) {
+  html,
+  body,
+  #root,
+  .app {
+    height: auto;
+  }
+
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .stage {
+    height: 58svh;
+    min-height: 320px;
+  }
+
+  .sidebar {
+    overflow: visible;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .brand-sub {
+    display: none;
+  }
+}
+
+/* Bigger touch targets for coarse pointers. */
+@media (pointer: coarse) {
+  .card button,
+  .toggle,
+  .field-row select {
+    min-height: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
 }

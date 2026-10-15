@@ -277,3 +277,24 @@ export function computeFieldLines(dipoles: readonly Dipole[], options: FieldLine
   })
   return lines
 }
+
+/**
+ * Relative field strength along each line, for shading: log10|B| at every
+ * point, mapped to 0–1 between the 5th and 98th percentiles over all lines.
+ * Log scale because |B| spans orders of magnitude (∝ 1/r³). Relative only:
+ * 0 and 1 are the weakest and strongest regions currently drawn.
+ */
+export function lineIntensities(lines: readonly FieldLine[], dipoles: readonly Dipole[], softening: number): number[][] {
+  const logs = lines.map((l) =>
+    l.points.map((p) => {
+      const b = length(totalField(dipoles, p, softening))
+      return b > 0 && Number.isFinite(b) ? Math.log10(b) : Number.NaN
+    }),
+  )
+  const all = logs.flat().filter(Number.isFinite).sort((a, b) => a - b)
+  if (all.length === 0) return logs.map((l) => l.map(() => 0))
+  const lo = all[Math.floor(0.05 * (all.length - 1))]
+  const hi = all[Math.floor(0.98 * (all.length - 1))]
+  const span = hi - lo
+  return logs.map((l) => l.map((v) => (!Number.isFinite(v) ? 0 : span > 0 ? Math.min(1, Math.max(0, (v - lo) / span)) : 0.5)))
+}
