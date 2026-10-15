@@ -47,11 +47,10 @@ npm run check    # typecheck, lint, tests, production build
 ## Preview and CI
 
 - **CI:** `.github/workflows/deploy-pages.yml` runs `npm run check` on every push to `main`.
-- **GitHub Pages:** the same workflow deploys `dist/` to Pages, but only when Pages is enabled with
-  *Source: GitHub Actions*. This repository is private on GitHub Free, where Pages is unavailable, so the
-  deploy step is skipped. Making the repo public or moving to a paid plan, then enabling Pages, turns it on
-  with no code changes (the base path comes from `actions/configure-pages`).
+- **Live site:** https://osss20.github.io/FIELDVERSE/ — the same workflow deploys `dist/` to GitHub Pages
+  (Settings → Pages → Source: *GitHub Actions*) after the checks pass. If Pages is ever disabled, the
+  deploy is skipped instead of failing. The base path comes from `actions/configure-pages`.
 - **Private preview:** `npm run build:preview` builds `dist-preview/` with relative asset paths for a
-  private claude.ai Artifact. It is republished manually after milestones, not on every push.
+  private claude.ai Artifact. It is republished manually, not on every push.
 
 After cloning, enable the auto-push hook: `git config core.hooksPath .githooks` (see `CLAUDE.md`).
