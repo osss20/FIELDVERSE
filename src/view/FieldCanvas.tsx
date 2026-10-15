@@ -28,6 +28,20 @@ export function FieldCanvas({ dipoles, selectedId, blockedId, onSelect, onMove, 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [size, setSize] = useState({ w: 800, h: 600 })
   const [drag, setDrag] = useState<Drag | null>(null)
+  // Bumped when the colour theme changes, so the canvas repaints with the new tokens.
+  const [themeVersion, setThemeVersion] = useState(0)
+
+  useEffect(() => {
+    const bump = () => setThemeVersion((v) => v + 1)
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    media.addEventListener('change', bump)
+    const mo = new MutationObserver(bump)
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => {
+      media.removeEventListener('change', bump)
+      mo.disconnect()
+    }
+  }, [])
 
   useLayoutEffect(() => {
     const el = canvasRef.current!
@@ -62,7 +76,7 @@ export function FieldCanvas({ dipoles, selectedId, blockedId, onSelect, onMove, 
     const ctx = canvas.getContext('2d')!
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     draw(ctx, size.w, size.h, lines, dipoles, selectedId, blockedId, screenTransform(size.w, size.h, ppm), ppm)
-  }, [lines, dipoles, selectedId, blockedId, size, ppm])
+  }, [lines, dipoles, selectedId, blockedId, size, ppm, themeVersion])
 
   const pointerWorld = (e: React.PointerEvent) => {
     const r = canvasRef.current!.getBoundingClientRect()

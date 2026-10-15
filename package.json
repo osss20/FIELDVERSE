@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "npm run typecheck && npm run lint && npm run test && npm run build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:preview": "node scripts/build-preview.mjs"
   },
   "dependencies": {
     "react": "^19.2.8",

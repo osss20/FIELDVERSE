@@ -16,8 +16,10 @@
   --blocked: #d13b2f;
 }
 
+/* Dark tokens apply for a dark system theme unless light is chosen explicitly,
+   and whenever dark is chosen explicitly (data-theme on the root element). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --bg: #12151b;
     --fg: #e6e9ef;
     --muted: #9aa3b5;
@@ -28,7 +30,26 @@
     --magnet-outline: #e6e9ef;
     --handle: #6c7487;
     --blocked: #ff6b5e;
+    color-scheme: dark;
   }
+}
+
+:root[data-theme='dark'] {
+  --bg: #12151b;
+  --fg: #e6e9ef;
+  --muted: #9aa3b5;
+  --border: #2c323d;
+  --button-bg: #1c2129;
+  --canvas-bg: #0d1015;
+  --field-line: #8fb3e0;
+  --magnet-outline: #e6e9ef;
+  --handle: #6c7487;
+  --blocked: #ff6b5e;
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
 }
 
 * {
